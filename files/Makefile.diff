@@ -1,0 +1,88 @@
+--- nlfem_src/nlfem/Makefile	2026-06-28 17:34:00.000000000 +0000
++++ build/Makefile	2026-07-15 20:53:20.404762859 +0000
+@@ -20,8 +20,9 @@
+     OPT_FLAGS = -O3 -g -DOPT
+ endif
+ 
+-CXXFLAGS = $(OPT_FLAGS) -std=c++11 -fPIC -DKARMA_MPI -DUSEPETSC=1 -DDEDICATED_FEM_PROC=0
++CXXFLAGS = $(OPT_FLAGS) -std=c++11 -fPIC -DKARMA_MPI -DUSEPETSC=1 -DDEDICATED_FEM_PROC=0 -DUSEGPU=$(USEGPU)
+ FFLAGS   = $(OPT_FLAGS) -fPIC -DKARMA_MPI
++NVCCFLAGS = -O3 -std=c++11 -arch=$(CUDA_ARCH) -Xcompiler -fPIC -Isrc/gpu
+ 
+ # -------------------------------------------------------
+ # PETSc paths (supports both arch-based and flat installs)
+@@ -49,7 +50,12 @@
+     -Isrc/options_parser \
+     -Isrc/screen \
+     -Isrc/string_utilities \
+-    -Isrc/file_io
++    -Isrc/file_io \
++    -Isrc/gpu
++
++ifeq ($(USEGPU),1)
++    INCLUDES += -I$(CUDA_DIR)/include
++endif
+ 
+ # -------------------------------------------------------
+ # Link flags
+@@ -66,6 +72,10 @@
+     LDFLAGS += -L$(LAPACK_DIR) -llapack -lblas
+ endif
+ 
++ifeq ($(USEGPU),1)
++    LDFLAGS += -L$(CUDA_DIR)/lib64 -Wl,-rpath,$(CUDA_DIR)/lib64 -lcudart
++endif
++
+ # -------------------------------------------------------
+ # Source files
+ # -------------------------------------------------------
+@@ -85,6 +95,12 @@
+     src/string_utilities/string_utilities.cc \
+     src/file_io/file_io.cc
+ 
++ifeq ($(USEGPU),1)
++    CU_SRCS  = src/gpu/cable_kernels.cu
++else
++    CXX_SRCS += src/gpu/gpu_assembly_stub.cc
++endif
++
+ F90_SRCS = \
+     src/fem/SM3MB.F90 \
+     src/fem/SM3MH.F90 \
+@@ -95,7 +111,8 @@
+ CXX_OBJS = $(patsubst src/%.cc, $(BUILD_DIR)/%.o, \
+             $(patsubst src/%.cpp,$(BUILD_DIR)/%.o, $(CXX_SRCS)))
+ F90_OBJS = $(patsubst src/%.F90,$(BUILD_DIR)/%.o, $(F90_SRCS))
+-OBJS     = $(CXX_OBJS) $(F90_OBJS)
++CU_OBJS  = $(patsubst src/%.cu, $(BUILD_DIR)/%.o, $(CU_SRCS))
++OBJS     = $(CXX_OBJS) $(F90_OBJS) $(CU_OBJS)
+ 
+ # -------------------------------------------------------
+ # Targets
+@@ -125,8 +142,25 @@
+ 	@mkdir -p $(dir $@)
+ 	$(FC) $(FFLAGS) $(INCLUDES) -c $< -o $@
+ 
++# Compile CUDA .cu files (only reached when USEGPU=1, i.e. CU_SRCS is non-empty)
++$(BUILD_DIR)/%.o: src/%.cu
++	@mkdir -p $(dir $@)
++	$(NVCC) $(NVCCFLAGS) -c $< -o $@
++
++# -------------------------------------------------------
++# Standalone GPU validation harness (see src/gpu/validate_cable.cc).
++# Deliberately does NOT depend on PETSc/MPI/ParMETIS -- just the kernel
++# and a plain-CPU reference transcription of the same math, so you can
++# sanity-check the kernel before trusting it inside a real nlfem run.
++# -------------------------------------------------------
++validate_cable: src/gpu/validate_cable.cc src/gpu/cable_kernels.cu
++	@mkdir -p $(BUILD_DIR)/gpu
++	$(NVCC) $(NVCCFLAGS) -c src/gpu/cable_kernels.cu -o $(BUILD_DIR)/gpu/cable_kernels.o
++	$(NVCC) $(NVCCFLAGS) src/gpu/validate_cable.cc $(BUILD_DIR)/gpu/cable_kernels.o -o validate_cable
++	@echo "Run ./validate_cable -- expect PASS with diff ~1e-12 or smaller."
++
+ clean:
+-	rm -rf $(BUILD_DIR) nlfem
++	rm -rf $(BUILD_DIR) nlfem validate_cable
+ 
+ # Print resolved paths for debugging
+ info:

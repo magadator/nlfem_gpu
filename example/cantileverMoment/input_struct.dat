@@ -1,0 +1,73 @@
+[Structural]
+#
+[[ElementProperties]]
+ElementType      = (3)
+defaultEmod      = -1.
+inPlaneEmod      = 1.2E6
+outPlaneEmod     = 1.2E6
+defaultPoisRatio = 0.
+defaultThick     = 0.1
+defaultDensity   = (1.)
+surfaceFilename  = 2by16beam_L12.vtk
+nodeFixedFile    = bc.txt
+forcesFile       = 2by16beamLoading100Per.txt
+dirVecIndex      = -1
+[[/ElementProperties]]
+### 
+[[Solver]]
+recordNodeOutput      = true
+isUnsteady            = false
+doRestart             = false
+isNonLinear           = true
+relaxFactor           = 0.95
+newTol                = 1.E-6
+timeIntegrationMethod = implicit
+[[/Solver]]  
+#
+[[Loading]]
+BodyForces            = false
+Gravity               = (0.,0.,19.13819875);
+ExternalBodyForceMag  = 19.13819875
+ExternalBodyForceDir  = z
+PressureLoading       = false
+PressureLoadingTime   = 10000.
+PressureMagnitude     = 1.
+PressureDirection     = z
+[[/Loading]]
+#
+[[FSI]]
+#
+[[[AuxGeometry]]]
+[[[/AuxGeometry]]]
+##
+[[[Solver]]]
+[[[/Solver]]]
+##
+[[/FSI]]
+#
+[[Output]]
+numberOfNodes        = 1
+node1                = 32
+DOF1                 = all     #x,y,z,alpha,beta, or all
+freq1                = 10
+[[/Output]]
+#
+[[Unsteady]]
+gamma                = 0.5
+beta                 = 0.25
+dt                   = 1.E-3
+timeSteps            = 100
+ntSkip               = 1
+[[/Unsteady]]
+#
+[[Restart]]
+restartSkip          = 500
+restartTS            = 0
+[[/Restart]]
+#
+[[Nonlinear]]
+numLoadSteps         = 100
+nonlinearIts         = 10
+[[/Nonlinear]]
+#
+[/Structural]

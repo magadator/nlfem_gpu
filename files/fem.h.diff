@@ -1,0 +1,17 @@
+--- nlfem_src/nlfem/src/fem/fem.h	2026-06-26 21:01:33.000000000 +0000
++++ build/src/fem/fem.h	2026-07-15 20:51:29.586622525 +0000
+@@ -85,6 +85,14 @@
+     vector<double> stiff_vec_;
+     vector<double> unmat_vec_;
+     vector<double> damp_vec_;
++    //GPU element assembly (Phase 1: CABLE elements only, see src/gpu/)
++    bool useGPUAssembly_;
++    void gpuPrecomputeCableElements();
++    //local-face-id -> index into GPU batch result, -1 if not a cable element
++    vector<int>    gpuCableIndex_;
++    vector<double> gpuCableKe_;
++    vector<double> gpuCableMe_;
++    vector<double> gpuCableFvec_;
+     //MPI Vars
+     int myElementCount_;
+     int myNodeCount_;

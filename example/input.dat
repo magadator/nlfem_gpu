@@ -1,0 +1,97 @@
+# nlfem input file
+# -------------------------------------------------------
+# Example: Nonlinear unsteady cable simulation
+# Mesh:    fem.vtk  (VTK unstructured grid)
+# BCs:     bc.txt   (fixed node list)
+# -------------------------------------------------------
+
+[Structural]
+
+  [[ElementProperties]]
+  ElementType      = (5)          # 1=SimpleTri, 2=LMITC3, 3=MITC3, 4=Beam, 5=Cable
+  defaultEmod      = 4.3E10       # Default Young's modulus [Pa]
+  inPlaneEmod      = 1e9          # In-plane modulus (anisotropic option) [Pa]
+  outPlaneEmod     = 1e9          # Out-of-plane modulus (anisotropic option) [Pa]
+  defaultPoisRatio = 0.3          # Poisson's ratio
+  defaultDensity   = (1150)       # Material density [kg/m^3]
+  defaultCSA       = 3.91E-9      # Cross-sectional area for beam/cable [m^2]
+  defaultThick     = 1e-03        # Shell thickness [m]
+  surfaceFilename  = fem.vtk      # VTK mesh file (node/element connectivity)
+  nodeFixedFile    = bc.txt       # File listing fixed node IDs and constrained DOFs
+  dirVecIndex      = -1           # Director vector index (-1 = auto from normals)
+  cableOnly        = true         # Force all elements to cable type
+  [[/ElementProperties]]
+
+  [[Solver]]
+  isFSI                 = true    # Enable fluid-structure interaction coupling
+  useAuxGeometry        = false   # Use auxiliary geometry for load/disp transfer
+  3Das2D                = false   # Treat 3D mesh as 2D (planar problems)
+  recordNodeOutput      = true    # Write time-history data for selected nodes
+  isUnsteady            = true    # Unsteady (transient) simulation
+  doRestart             = false   # Resume from a restart file
+  isNonLinear           = true    # Enable geometric/material nonlinearity
+  readNormals           = false   # Read director vectors from file
+  relaxFactor           = 0.9     # Newton relaxation factor
+  newTol                = 1.E-6   # Newton convergence tolerance
+  timeIntegrationMethod = implicit # Time integration: implicit (Newmark-Beta)
+  [[/Solver]]
+
+  [[Loading]]
+  BodyForces            = false
+  Gravity               = (0.,0.,19.13819875)   # Gravity or body force vector [m/s^2]
+  ExternalBodyForceMag  = 19.13819875
+  ExternalBodyForceDir  = z
+  PressureLoading       = false
+  PressureLoadingTime   = 1000000.
+  PressureMagnitude     = 0.01
+  PressureDirection     = z
+  [[/Loading]]
+
+  [[FSI]]
+    [[[AuxGeometry]]]
+    auxFilename           = geo.vtk          # Auxiliary aerodynamic surface mesh
+    geom2femInterpMethod  = single           # Disp. interp: PWC/WLSQR/LSQRZ/WLQRSZ/WLSQRX
+    auxDispInterpOrder    = first            # Displacement interpolation order
+    numDispInterpPts      = 1
+    auxForceInterpMethod  = cable            # Force interp: one-to-one/cloud/cable
+    auxForceInterpOrder   = second           # Force interpolation order
+    numForceInterpPts     = 20
+    rayLength             = 200.
+    geomThickFactor       = 9.09
+    compIDs               = (1)
+    revertGeometryNormals = false
+    enforceContact        = 1
+    [[[/AuxGeometry]]]
+
+    [[[Solver]]]
+    fsiSkip              = 1                 # FSI coupling frequency (every N steps)
+    [[[/Solver]]]
+  [[/FSI]]
+
+  [[Output]]
+  numberOfNodes        = 1
+  node1                = 40                 # Global node ID to record
+  DOF1                 = all               # DOFs to record: x/y/z/alpha/beta/all
+  freq1                = 1                 # Output frequency (every N timesteps)
+  [[/Output]]
+
+  [[Unsteady]]
+  gamma                = 1.0               # Newmark-Beta gamma (0.5=trapezoidal)
+  beta                 = 0.5               # Newmark-Beta beta  (0.25=trapezoidal)
+  rampFactor           = 1.
+  dt                   = 1e-6             # Time step size [s]
+  timeSteps            = 100000           # Total number of time steps
+  ntSkip               = 500             # VTK output frequency
+  [[/Unsteady]]
+
+  [[Restart]]
+  restartSkip          = 5000             # Write restart every N steps
+  restartTS            = -1              # Restart from timestep (-1 = latest)
+  [[/Restart]]
+
+  [[Nonlinear]]
+  numLoadSteps         = 100             # Number of load increments
+  nonlinearIts         = 100             # Max Newton iterations per step
+  [[/Nonlinear]]
+
+[/Structural]

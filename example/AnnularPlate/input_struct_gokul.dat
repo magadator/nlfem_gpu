@@ -1,0 +1,63 @@
+[Structural]
+#
+[[ElementProperties]]
+ElementType      = (3)
+defaultEmod      = -1.
+inPlaneEmod      = 32.E6
+outPlaneEmod     = 32.E6
+defaultPoisRatio = 0.0
+defaultThick     = 0.03
+surfaceFilename  = annular.vtk 
+nodeFixedFile    = annularBC.txt
+forcesFile       = newLoading_Gokul.txt 
+dirVecIndex      = -1
+[[/ElementProperties]]
+#
+[[Solver]]  
+maxIts                = 1000
+relTol                = 1E-15
+absTol                = 1E-15
+isUnsteady            = false
+doRestart             = false
+isNonLinear           = true
+relaxFactor           = 0.1#0.9
+newTol                = 1.E-8
+timeIntegrationMethod = implicit
+recordNodeOutput     = true
+[[/Solver]]  
+#
+[[Loading]]
+BodyForces            = false
+Gravity               = (0.,0.,19.13819875);
+ExternalBodyForceMag  = 19.13819875
+ExternalBodyForceDir  = z
+PressureLoading       = false
+PressureLoadingTime   = 100000.
+PressureMagnitude     = 1000.
+PressureDirection     = z
+[[/Loading]]
+#
+[[Output]]
+numberOfNodes        = 2
+node1                = 5 #210
+DOF1                 = all     #x,y,z,alpha,beta, or all
+freq1                = 1#1000
+node2                = 0
+DOF2                 = all     #x,y,z,alpha,beta, or all
+freq2                = 1#1000
+
+[[/Output]]
+#
+[[Unsteady]]
+ntSkip               = 1
+[[/Unsteady]]
+#
+[[Restart]]
+[[/Restart]]
+#
+[[Nonlinear]]
+numLoadSteps         = 1000
+nonlinearIts         = 10000
+[[/Nonlinear]]
+#
+[/Structural]

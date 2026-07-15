@@ -1,0 +1,136 @@
+--- nlfem_src/nlfem/src/fem/fem.cc	2026-07-14 17:49:21.000000000 +0000
++++ build/src/fem/fem.cc	2026-07-15 20:54:21.321903430 +0000
+@@ -9,8 +9,11 @@
+  *   linear system setup, restart I/O, FSI load/displacement transfer,
+  *   and VTK output of deformed geometry and stress fields.
+  */
++#include <cstdlib>
++#include <stdexcept>
+ #include "options.h"
+ #include "fem.h"
++#include "../gpu/gpu_assembly.h"
+ 
+ #define OUTPUT_FORCE_POINT_CLOUD        0 //dump stencil cloud for force transfer
+ #define OUTPUT_DISPLACEMENT_POINT_CLOUD 0 //dump stencil cloud for displacement transfer
+@@ -37,6 +40,11 @@
+     numberOfElementTypes_ = 0;
+     inPlaneElastic_       = 0.;
+     outPlaneElastic_      = 0.;
++    //GPU assembly on by default when built with USEGPU=1 and a device is
++    //present (see gpuPrecomputeCableElements()); set NLFEM_NO_GPU=1 in the
++    //environment to force the CPU path at runtime without recompiling,
++    //e.g. for debugging or A/B comparison against the GPU path.
++    useGPUAssembly_ = (getenv("NLFEM_NO_GPU") == nullptr);
+     return;
+   }
+   
+@@ -6551,12 +6559,83 @@
+ 
+  }
+  
++ void fem::gpuPrecomputeCableElements()
++ {
++   // Batch-compute Ke/Me/Fvec for every CABLE element this rank owns in one
++   // GPU launch, cached in gpuCable{Ke,Me,Fvec}_. Called once per assembly
++   // pass, BEFORE the per-element loop in assembleGlobKMat(). Everything
++   // else (BEAM, SIMPLETRI, MITC3/LMITC3) is untouched and still computed
++   // on CPU via comp_Ke_loc/comp_Me_loc inside the loop -- see the dispatch
++   // in assembleGlobKMat() below.
++   using namespace KARMA;
++
++   gpuCableIndex_.assign(myElementCount_, -1);
++   gpuCableKe_.clear();
++   gpuCableMe_.clear();
++   gpuCableFvec_.clear();
++
++   if (!useGPUAssembly_ || !gpuIsAvailable()) return;
++
++   GPUCableInput in;
++   vector<int> localFaceOfCable; // batch index -> local face id f
++   for (int f = 0; f < myElementCount_; ++f)
++     {
++       if (elementData_[f].type != CABLE) continue;
++
++       int nnodesOffset = nnodesLocalOffset_[f];
++       int fn0 = faces_[nnodesOffset + 0];
++       int fn1 = faces_[nnodesOffset + 1];
++
++       in.fn0.push_back(fn0);
++       in.fn1.push_back(fn1);
++       for (int idir = 0; idir < xyz; ++idir)
++         {
++           in.x0_0.push_back(nodes0_[fn0*xyz+idir]);
++           in.x1_0.push_back(nodes0_[fn1*xyz+idir]);
++           in.x0_t.push_back(nodes_ [fn0*xyz+idir]);
++           in.x1_t.push_back(nodes_ [fn1*xyz+idir]);
++         }
++       in.eModulus.push_back(eModulus_[f]);
++       in.density.push_back(density_[f]);
++       in.area.push_back(Area_[f]);
++
++       gpuCableIndex_[f] = (int)localFaceOfCable.size();
++       localFaceOfCable.push_back(f);
++     }
++   in.nCable = (int)localFaceOfCable.size();
++   if (in.nCable == 0) return;
++
++   GPUCableOutput out;
++   try
++     {
++       gpuComputeCableElements(in, out);
++     }
++   catch (const std::exception& ex)
++     {
++       // Fail loud, fail to CPU. Never silently produce a partially-GPU,
++       // partially-garbage assembly.
++       Screen::MasterInfo("GPU cable assembly failed (" + string(ex.what()) +
++                           "); falling back to CPU for this assembly pass.");
++       gpuCableIndex_.assign(myElementCount_, -1);
++       return;
++     }
++
++   gpuCableKe_   = out.Ke;
++   gpuCableMe_   = out.Me;
++   gpuCableFvec_ = out.Fvec;
++   // out.tension currently unused by the caller; wire into
++   // myCableTensionVector_[f] here if/when downstream code needs it read
++   // back per-element -- same indexing as gpuCableIndex_.
++ }
++
+  void fem::assembleGlobKMat()
+  {
+ #if (USEPETSC>0)
+    //assemble global stiffness, mass, and LHS matrices
+    Screen::MasterInfo("Assembling global FEM matrices");
+ 
++   gpuPrecomputeCableElements();
++
+ #if (TIME_ASSEMBLY == 1)
+    ierr = MPI_Barrier(MPI_COMM_WORLD);
+    clock_t start;
+@@ -6582,10 +6661,21 @@
+        fill(Me_loc_.begin(),Me_loc_.end(),0.);
+        fill(Fvec_assemble_.begin(),Fvec_assemble_.end(),0.);
+        for (int i=0;i<3;++i) for (int j=0;j<3;++j) cauchyStressTensor_[f][i][j] = 0.;
+-       //compute local stiffness matrix
+-       comp_Ke_loc(Ke_loc_,Fvec_assemble_,f,elType);
+-       //compute local mass matrix
+-       comp_Me_loc(Me_loc_,f,elType);
++       //compute local stiffness and mass matrices --
++       //GPU path for CABLE elements when available (see gpuPrecomputeCableElements()),
++       //CPU path (original, unchanged) for everything else.
++       if (elType == CABLE && gpuCableIndex_[f] >= 0)
++         {
++           int gi = gpuCableIndex_[f];
++           for (int i=0;i<36;++i) Ke_loc_[i] = gpuCableKe_[gi*36+i];
++           for (int i=0;i<36;++i) Me_loc_[i] = gpuCableMe_[gi*36+i];
++           for (int i=0;i<6; ++i) Fvec_assemble_[i] = gpuCableFvec_[gi*6+i];
++         }
++       else
++         {
++           comp_Ke_loc(Ke_loc_,Fvec_assemble_,f,elType);
++           comp_Me_loc(Me_loc_,f,elType);
++         }
+ 
+        //damping
+        double alphadamp = 0.0;

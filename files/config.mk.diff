@@ -1,0 +1,19 @@
+--- nlfem_src/nlfem/config.mk	2026-06-28 17:34:00.000000000 +0000
++++ build/config.mk	2026-07-15 20:52:40.895796803 +0000
+@@ -23,3 +23,16 @@
+ 
+ # Set to 1 for debug build
+ DEBUG = 0
++
++# ------------------------------------------------------------
++# GPU (CUDA) element assembly -- Phase 1: CABLE elements only.
++# Set USEGPU=0 to build the original all-CPU codebase unchanged
++# (src/gpu/gpu_assembly_stub.cc is used instead of the real kernel,
++# so nothing about the CPU path or its output changes).
++# ------------------------------------------------------------
++USEGPU   = 1
++NVCC     = nvcc
++CUDA_DIR = /usr/local/cuda
++# Quadro K1200 = Maxwell, compute capability 5.0 (sm_50).
++# Check yours with: nvidia-smi --query-gpu=compute_cap --format=csv
++CUDA_ARCH = sm_50

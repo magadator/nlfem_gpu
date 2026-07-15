@@ -1,0 +1,50 @@
+[Structural]
+#
+[[ElementProperties]]
+ElementType      = (3)
+defaultEmod      = -1.
+inPlaneEmod      = 2.0685E7
+outPlaneEmod     = 2.0685E7
+defaultPoisRatio = 0.3
+defaultDensity   = (0.001)
+defaultThick     = 0.03
+surfaceFilename  = 20by20_cyl.vtk 
+nodeFixedFile    = 20by20_cylBC.txt 
+forcesFile       = cylinder_forces.txt
+dirVecIndex      = -1
+[[/ElementProperties]]
+#
+[[Solver]]  
+useAuxGeometry        = false
+3Das2D                = false
+recordNodeOutput      = false
+isUnsteady            = false
+doRestart             = false
+isNonLinear           = true
+readNormals           = false
+prestrained           = false
+relaxFactor           = 0.9
+newTol                = 1.E-8
+timeIntegrationMethod = implicit
+[[/Solver]]  
+# 
+[[Loading]]
+[[/Loading]]
+#
+[[Unsteady]]
+gamma                = 0.5
+beta                 = 0.25
+dt                   = 1.E-2
+timeSteps            = 500
+ntSkip               = 1
+[[/Unsteady]]
+#
+[[Restart]]
+[[/Restart]]
+#
+[[Nonlinear]]
+numLoadSteps   = 500
+nonlinearIts   = 25
+[[/Nonlinear]]
+#
+[/Structural]
