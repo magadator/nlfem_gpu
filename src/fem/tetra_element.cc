@@ -130,12 +130,12 @@ void comp_B_tetra(const TetraCoords& c, double B[72], double* vol)
     /* Fill B row by row for each node */
     auto fill_node = [&](int node, double dNdx, double dNdy, double dNdz) {
         const int c0 = 3 * node;
-        /* row 0: eps_xx */  B[0*12 + c0+0] = dNdx;
-        /* row 1: eps_yy */  B[1*12 + c0+1] = dNdy;
-        /* row 2: eps_zz */  B[2*12 + c0+2] = dNdz;
-        /* row 3: gamma_yz */B[3*12 + c0+1] = dNdz;  B[3*12 + c0+2] = dNdy;
-        /* row 4: gamma_xz */B[4*12 + c0+0] = dNdz;  B[4*12 + c0+2] = dNdx;
-        /* row 5: gamma_xy */B[5*12 + c0+0] = dNdy;  B[5*12 + c0+1] = dNdx;
+        /* row 0: eps_xx */   B[0*12 + c0+0] = dNdx;
+        /* row 1: eps_yy */   B[1*12 + c0+1] = dNdy;
+        /* row 2: eps_zz */   B[2*12 + c0+2] = dNdz;
+        /* row 3: gamma_yz */ B[3*12 + c0+1] = dNdz;  B[3*12 + c0+2] = dNdy;
+        /* row 4: gamma_xz */ B[4*12 + c0+0] = dNdz;  B[4*12 + c0+2] = dNdx;
+        /* row 5: gamma_xy */ B[5*12 + c0+0] = dNdy;  B[5*12 + c0+1] = dNdx;
     };
 
     fill_node(0, dN0dx, dN0dy, dN0dz);
@@ -203,7 +203,7 @@ void comp_Me_tetra(const TetraCoords& coords,
 
     std::memset(Me.M, 0, sizeof(Me.M));
 
-    const double diag_coef = mat.rho * vol / 20.0;
+    const double diag_coef    = mat.rho * vol / 20.0;
     const double offdiag_coef = mat.rho * vol / 60.0;
 
     for (int I = 0; I < TETRA_NODES; ++I) {
@@ -219,8 +219,15 @@ void comp_Me_tetra(const TetraCoords& coords,
 }
 
 /* ------------------------------------------------------------------ */
-/*  Internal force vector  Fe = vol * B^T * C * B * u_e  (12)         */
+/*  Internal force vector  Fe = vol * B^T * sigma  (12)               */
 /* ------------------------------------------------------------------ */
+/*
+ * sigma = C * eps,  eps = B * u_e
+ * Fe_i  = vol * sum_k  B[k][i] * sigma[k]
+ *
+ * This is the residual internal force that enters the Newton-Raphson
+ * right-hand side as -Fe (work-conjugate to the virtual displacement).
+ */
 
 void comp_Fe_tetra(const TetraCoords& coords,
                    const TetraMaterial& mat,
@@ -233,7 +240,7 @@ void comp_Fe_tetra(const TetraCoords& coords,
     comp_B_tetra(coords, B, &vol);
     comp_C_iso(mat.E, mat.nu, C);
 
-    /* eps = B * u_e  (6-vector of strains) */
+    /* eps = B * u_e  (6-vector of strains, Voigt) */
     double eps[6];
     std::memset(eps, 0, sizeof(eps));
     for (int i = 0; i < 6; ++i)
@@ -247,4 +254,7 @@ void comp_Fe_tetra(const TetraCoords& coords,
         for (int k = 0; k < 6; ++k)
             sigma[i] += C[i*6+k] * eps[k];
 
-    /* Fe = vol * B^T
+    /* Fe = vol * B^T * sigma  (12-vector) */
+    std::memset(Fe.F, 0, sizeof(Fe.F));
+    for (int i = 0; i < 12; ++i)
+        for (int k = 0; k < 6; ++k)
