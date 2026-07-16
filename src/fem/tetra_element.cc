@@ -256,4 +256,6 @@ void comp_Fe_tetra(const TetraCoords& coords,
 
     /* Fe = vol * B^T * sigma  (12-vector) */
     std::memset(Fe.F, 0, sizeof(Fe.F));
-    for (int i = 0; i < 12
+    for (int i = 0; i < 12; ++i)
+        for (int k = 0; k < 6; ++k)
+            Fe.F[i] += vol *
