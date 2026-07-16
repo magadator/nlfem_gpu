@@ -14,4 +14,37 @@
  *   row:  0       1       2        3        4        5
  */
 
-#include "te
+#include "tetra_element.h"
+#include <cstring>
+#include <cmath>
+#include <stdexcept>
+
+namespace nlfem {
+
+/* ------------------------------------------------------------------ */
+/*  Constitutive matrix  C  (6×6, Voigt, isotropic linear elastic)    */
+/* ------------------------------------------------------------------ */
+
+void comp_C_iso(double E, double nu, double C[36])
+{
+    std::memset(C, 0, 36 * sizeof(double));
+
+    const double lam = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu));
+    const double mu  = E / (2.0 * (1.0 + nu));
+
+    /* Normal-normal block (rows/cols 0,1,2) */
+    C[0*6+0] = lam + 2.0*mu;  C[0*6+1] = lam;            C[0*6+2] = lam;
+    C[1*6+0] = lam;            C[1*6+1] = lam + 2.0*mu;  C[1*6+2] = lam;
+    C[2*6+0] = lam;            C[2*6+1] = lam;            C[2*6+2] = lam + 2.0*mu;
+
+    /* Shear block (rows/cols 3,4,5) — diagonal only */
+    C[3*6+3] = mu;
+    C[4*6+4] = mu;
+    C[5*6+5] = mu;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Strain-displacement matrix  B  (6×12, constant over element)       */
+/* ------------------------------------------------------------------ */
+/*
+ * For a linear tet with nodes 0,1,2
