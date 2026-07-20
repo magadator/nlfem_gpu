@@ -2139,8 +2139,6 @@ namespace KARMA {
     //Partition mesh using ParMETIS
     Screen::MasterInfo("Initializing ParMETIS");
 
-    //Usage: Updated 1/18/19 - jedit
-
     //ParMETIS_V3_PartMeshKway(idx_t *elmdist, idx_t *eptr, idx_t *eind, idx_t *elmwgt, int *wgtflag, int *numflag, int *ncon, int * ncommonnodes, int *nparts, float *tpwgts, float *ubvec, int *option$
 
     //elmdist      : partition offsets. Sized                    (np+1)
@@ -4514,7 +4512,7 @@ void fem::applyBC(int& nonUniqueNodeCount,
 
 #if (DEDICATED_FEM_PROC == 1)
 
-        int gn = mn;//movingNodes_[mn]; jedit:6/25/19 - cylfil case for JCP
+        int gn = mn;//movingNodes_[mn];
 
         vector<int> ordered         (nof_effective_nodes_,0);
         vector<double> dist         (nof_effective_nodes_,0.);
@@ -4845,7 +4843,7 @@ void fem::applyBC(int& nonUniqueNodeCount,
     for (int mn=0;mn<movingNodes_.size();++mn)
       {
 #if (DEDICATED_FEM_PROC == 1)
-        int gn = mn;//movingNodes_[mn]; jedit:6/25/19 - cylfil case for JCP
+        int gn = mn;//movingNodes_[mn]; cylfil case for JCP
 #else
         int gn = mn;
 #endif
@@ -8412,7 +8410,6 @@ void fem::applyBC(int& nonUniqueNodeCount,
 
    //add them -- hold tempVec3
    VecWAXPY(tempVec3_p_,1.,tempVec_p_,tempVec2_p_);
-   //jedit - took this out for damping mat, Udotp1_p_ is updated incrementally in updateBetaNewmarkVel_updated
    //VecWAXPY(Udotp1_p_,1.,Udot_p_,tempVec3_p_); 
 
    //assemble p+1 level vectors
