@@ -3,30 +3,23 @@
 ## What this actually is
 
 This is **not** a full GPU rewrite of nlfem. It's the first, verified slice
-of one: the **cable element** stiffness/mass/internal-force computation now
-runs on the GPU in a single batched kernel launch, wired into the existing
-`assembleGlobKMat()` loop. Everything else — beam elements, shell elements
+of one: the **cable element** stiffness/mass/internal-force computation that
+runs on my old GPU in a single batched kernel launch, wired into the existing
+`assembleGlobKMat()` loop. Everything else: beam elements, shell elements
 (SIMPLETRI/LMITC3/MITC3), the Newton-Raphson nonlinear loop, Newmark-Beta
 time integration, PETSc's `MatSetValues`/`KSPSolve`, MPI, ParMETIS domain
-decomposition, FSI transfer, VTK output — is completely unchanged.
+decomposition, FSI transfer, VTK output is completely unchanged.
 
 Read this before running anything on real results.
 
-## Why it's scoped this way
+## How this is scoped for now:
 
-`nlfem` is validated research code (aortic dissection / parachute FSI). A
-mechanical, unverified translation of 20,000+ lines of nonlinear FEM math
-to CUDA is how you get silently wrong stresses — the code still runs, still
-produces plots, and the physics is quietly off. So this phase does three
-things, in order, for exactly one element type:
-
-1. Reads the existing CPU implementation (`comp_Ke_Cable` / `comp_Me_Cable`
+1. Change the CPU implementation (`comp_Ke_Cable` / `comp_Me_Cable`
    in `src/fem/linearTriElement.cc`) and transcribes it faithfully,
    including quirks that look like they might be bugs (see the comment
-   block at the top of `src/gpu/cable_kernels.cu` — in particular
+   block at the top of `src/gpu/cable_kernels.cu` : in particular
    `btb[i*6+j] = BL[j]*BL[j]*emod`, which uses `BL[j]` twice rather than
-   `BL[i]*BL[j]`. That's preserved as-is. If it's not intentional, it's your
-   call to fix, not something to quietly "correct" during a port).
+   `BL[i]*BL[j]`. That's preserved as-is. 
 2. Fixes exactly one thing that the CPU version gets away with but a GPU
    kernel can't: `comp_Me_Cable` reads `x0_t_`/`x1_t_` member scratch that
    was set by the *previous* call to `comp_Ke_Cable` for the same element,
@@ -44,11 +37,11 @@ port. The MITC3 shell in particular shares mutable state (`faceID`, `x0_0_`,
 that has to be untangled into a pure per-element function first. That's the
 next phase, not done here.
 
-## Hardware reality check — Quadro K1200
+## Hardware reality check: Quadro K1200 (my very old GPU in my old computer!)
 
 GPU is a 2016-era Maxwell part: ~640 CUDA cores, 4 GB GDDR5, compute
 capability 5.0, no tensor cores, no double-precision throughput advantage
-(FP64 runs at roughly 1/32 the FP32 rate on this class of card — nlfem does
+(FP64 runs at roughly 1/32 the FP32 rate on this class of card: nlfem does
 everything in `double`). Practical implications:
 
 - **Cable elements**: cheap per element, so this is mostly a latency/launch-
@@ -58,17 +51,15 @@ everything in `double`). Practical implications:
 - **Shell/MITC3** (when ported): this is where GPU assembly could
   meaningfully help, since it's the expensive element type per-DOF. But the
   K1200's FP64 throughput is modest, so don't expect the kind of speedup
-  you'd see on a datacenter card — expect a moderate win on assembly time,
+  you'd see on a datacenter card: expect a moderate win on assembly time,
   not a 10x.
 - **The linear solve** (still PETSc/CPU in this phase) is very likely your
   actual bottleneck for large meshes, not element assembly. Profile before
-  assuming assembly is where the time goes — `TIME_ASSEMBLY=1` in
+  assuming assembly is where the time goes: `TIME_ASSEMBLY=1` in
   `fem.cc` gives you a timer for exactly this.
 
 Bottom line: this phase is a correctness-first foundation, not a
-performance claim. Measure on your actual problem before drawing
-conclusions about whether GPU assembly is worth extending further on this
-card.
+performance claim.
 
 ## Build
 
@@ -96,7 +87,7 @@ make validate_cable
 ./validate_cable
 ```
 
-This builds a small standalone binary — no PETSc/MPI/ParMETIS needed —
+This builds a small standalone binary (no PETSc/MPI/ParMETIS needed)
 that runs the kernel on four synthetic cable elements (straight, angled,
 pre-stretched) and diffs the result against a plain-CPU transcription of
 `comp_Ke_Cable`/`comp_Me_Cable`. Expect:
@@ -106,13 +97,13 @@ max abs diff (Ke, Me, Fvec, tension) across 4 elements: <something like 1e-13>
 PASS
 ```
 
-If it doesn't say `PASS`, do not run this on real data — open an issue for
+If it doesn't say `PASS`, do not run this on real data: open an issue for
 yourself and fix the kernel first.
 
 For a second, stronger check on your actual mesh: run one assembly pass
 with `NLFEM_NO_GPU=1` set (forces CPU path) and again without it, and diff
 the resulting `Kmat_p_`/`Mmat_p_` matrices (or just compare the printed
-residual norm / displacement after one Newton iteration — they should
+residual norm / displacement after one Newton iteration: they should
 match to solver tolerance).
 
 ## Run
@@ -141,8 +132,8 @@ NLFEM_NO_GPU=1 mpirun -np <N> ./nlfem example/input.dat
 
 ## What's NOT done (be clear-eyed about this)
 
-- Beam element (`comp_Ke_BEBeam`/`comp_Me_BEBeam`) — not ported.
-- Shell elements (`SIMPLETRI`, `LMITC3`, `MITC3`) — not ported. MITC3 in
+- Beam element (`comp_Ke_BEBeam`/`comp_Me_BEBeam`): not ported.
+- Shell elements (`SIMPLETRI`, `LMITC3`, `MITC3`): not ported. MITC3 in
   particular needs the stateful-pipeline refactor described above first.
 - The linear system solve is still PETSc/CPU. Removing PETSc entirely (as
   originally asked) means replacing `KSPSolve` with a GPU sparse solver
@@ -151,7 +142,7 @@ NLFEM_NO_GPU=1 mpirun -np <N> ./nlfem example/input.dat
   benchmark whether it's actually faster than PETSc+GAMG on your CPU core
   count before committing to it.
 - MPI/ParMETIS domain decomposition is untouched. It's somewhat orthogonal
-  to a single-GPU port — you'd still want it if you run across multiple
+  to a single-GPU port: you'd still want it if you run across multiple
   nodes, though the domain-decomposition boundaries would need to align
   with per-GPU work if you ever go multi-GPU.
 
